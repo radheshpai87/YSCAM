@@ -158,7 +158,7 @@ This application can be easily deployed on Render's cloud platform:
 1. Create a free Render account at https://render.com
 2. Connect your GitHub/GitLab repository containing this project
 
-### Deployment Steps
+### Deployment Steps - Method 1: Using Web Service
 
 1. In your Render dashboard, click on "New" and select "Web Service"
 2. Connect to your repository and select the branch you want to deploy
@@ -167,10 +167,25 @@ This application can be easily deployed on Render's cloud platform:
    - **Name**: scam-detection-api (or your preferred name)
    - **Environment**: Python
    - **Build Command**: `./build.sh`
-   - **Start Command**: `gunicorn wsgi:app`
+   - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT wsgi:app`
+   - **Plan**: Free (or select a paid plan for better performance)
+   - **Python Version**: 3.11
+
+4. Click "Create Web Service"
+
+### Deployment Steps - Method 2: Using Docker (Recommended)
+
+1. In your Render dashboard, click on "New" and select "Web Service"
+2. Connect to your repository and select the branch you want to deploy
+3. Configure the following settings:
+
+   - **Name**: scam-detection-api (or your preferred name)
+   - **Environment**: Docker
    - **Plan**: Free (or select a paid plan for better performance)
 
 4. Click "Create Web Service"
+
+This Docker-based approach ensures that Tesseract OCR is properly installed and available for image processing.
 
 Render will automatically:
 

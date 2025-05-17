@@ -12,10 +12,26 @@ import os
 import sys
 import logging
 from PIL import Image
-import pytesseract
 import docx
 import fitz  # PyMuPDF
 import tempfile
+import shutil
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Check for Tesseract availability
+TESSERACT_AVAILABLE = os.getenv('TESSERACT_AVAILABLE', 'True').lower() != 'false'
+
+try:
+    import pytesseract
+    # Test if tesseract is actually accessible
+    tesseract_version = pytesseract.get_tesseract_version()
+except (ImportError, Exception) as e:
+    TESSERACT_AVAILABLE = False
+    print(f"Warning: Tesseract OCR not available: {e}")
+    print("Image text extraction will be limited.")
 
 # Configure logging
 logging.basicConfig(
@@ -144,13 +160,18 @@ class DocumentProcessor:
         """Extract text from an image using OCR"""
         logger.info(f"Extracting text from image: {image_path}")
         
+        # Open the image
         try:
+            image = Image.open(image_path)
+            
+            # If Tesseract is not available, return a message
+            if not TESSERACT_AVAILABLE:
+                logger.warning("Tesseract OCR is not available in this environment")
+                return "[Image content - OCR not available in this environment]"
+                
             # Check if tesseract is installed
             tesseract_version = pytesseract.get_tesseract_version()
             logger.info(f"Using Tesseract version: {tesseract_version}")
-            
-            # Open the image
-            image = Image.open(image_path)
             
             # Convert to RGB mode if needed (some images have alpha channels)
             if image.mode != 'RGB':
