@@ -1,0 +1,23 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment and IDE files
+.env
+.venv
+env/
+venv/
+ENV/
+.vscode/
+.idea/
+
+# Logs
+*.log
+api.log
+
+# Backup files
+*.bak
+
+# Temporary files
+temp_*

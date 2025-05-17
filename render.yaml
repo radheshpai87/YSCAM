@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: scam-detection-api
+    env: python
+    region: oregon
+    buildCommand: ./build.sh
+    startCommand: gunicorn --bind 0.0.0.0:$PORT wsgi:app --log-file -
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10
+      - key: PORT
+        value: 10000
+    plan: free
