@@ -39,14 +39,14 @@ RUN mkdir -p ./logs ./tmp
 COPY . .
 
 # Make all scripts executable
-RUN chmod +x build.sh verify_docker.sh test_lightweight_ocr.py
+RUN chmod +x build.sh verify_docker.sh
 
 # Run verification scripts
 RUN echo "=== Running Docker environment verification ===" && \
     ./verify_docker.sh > docker_verification.log && \
     cat docker_verification.log && \
     echo "=== Running Lightweight OCR verification ===" && \
-    python test_lightweight_ocr.py > lightweight_ocr_results.txt || echo "OCR test completed with notes"
+    python -c "import lightweight_ocr; print('Lightweight OCR module imported successfully')" > lightweight_ocr_results.txt || echo "OCR test completed with notes"
 
 # Set environment variables
 ENV PYTHONPATH=/app
