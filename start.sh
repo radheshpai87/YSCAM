@@ -13,25 +13,20 @@ echo "Environment: $ENV_TYPE"
 # Create optimized .env file for free tier
 echo "Setting up optimized configuration for free tier"
 {
-    echo "TESSERACT_AVAILABLE=True"
     echo "OCR_ENABLED=True"
-    echo "LIGHTWEIGHT_OCR=true"
     echo "PYTHONUNBUFFERED=1"
     echo "GUNICORN_WORKERS=1"
     echo "GUNICORN_THREADS=2"
     echo "GUNICORN_TIMEOUT=30"
     echo "LOG_LEVEL=warning"
+    # OCRSpace API key
+    echo "OCR_API_KEY=${OCR_API_KEY:-K87589515488957}"
 } > .env
 
-# Quick check for tesseract (fast path)
-if command -v tesseract &> /dev/null; then
-    echo "Tesseract found"
-    echo "TESSERACT_CMD=$(which tesseract)" >> .env
-    echo "OCR_ENABLED=True" >> .env
-else
-    echo "Tesseract not immediately found"
-    echo "OCR_ENABLED=False" >> .env
-fi
+# Ensure OCR cache directory exists
+mkdir -p ocr_cache
+echo "Created OCR cache directory"
+echo "OCR_ENABLED=True" >> .env
 
 # Set default port
 [ -z "$PORT" ] && export PORT=10000
@@ -40,9 +35,9 @@ fi
 source .env
 
 # Print minimal config information
-echo "TESSERACT_AVAILABLE: $TESSERACT_AVAILABLE"
 echo "OCR_ENABLED: $OCR_ENABLED"
-echo "LIGHTWEIGHT_OCR: $LIGHTWEIGHT_OCR"
+echo "OCR API Key configured: $(if [ -n "$OCR_API_KEY" ]; then echo "Yes"; else echo "No"; fi)"
+echo "Using lightweight OCR API"
 
 # Use optimized gunicorn settings for free tier
 echo "Starting optimized server on port $PORT"

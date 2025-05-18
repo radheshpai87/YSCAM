@@ -4,21 +4,19 @@
 
 echo "===== NON-DOCKER FALLBACK BUILD SCRIPT ====="
 echo "Current directory: $(pwd)"
-echo "Checking if running on Render platform"
+echo "Setting up lightweight OCR"
 
-# If not in Docker, we need to install Tesseract directly
-echo "Installing Tesseract OCR directly since Docker mode may not be used..."
+# We don't need Tesseract anymore, just set up our API-based OCR
+echo "Setting up lightweight OCR API environment..."
 
-# Try apt-get if we have sudo
-if command -v sudo &> /dev/null && command -v apt-get &> /dev/null; then
-    echo "Using apt-get to install Tesseract"
-    sudo apt-get update
-    sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libtesseract-dev
-    
-    # Verify installation
-    if command -v tesseract &> /dev/null; then
-        echo "Tesseract installed successfully:"
-        tesseract --version
+# Create OCR cache directory
+mkdir -p ocr_cache
+echo "Created OCR cache directory"
+
+# Set up environment variables
+echo "Setting up OCR environment variables"
+echo "OCR_ENABLED=True" > .env
+echo "OCR_API_KEY=${OCR_API_KEY:-K87589515488957}" >> .env
         echo "TESSERACT_AVAILABLE=True" > .env
     else
         echo "Failed to install Tesseract with apt-get"

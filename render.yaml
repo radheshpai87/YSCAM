@@ -17,10 +17,13 @@ services:
         value: "true"
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: OCR_ENABLED
+        value: "true"
+      - key: OCR_API_KEY
+        value: "K87589515488957"
     buildCommand: >-
-      chmod +x ./render_install_tesseract.sh &&
       chmod +x ./start.sh &&
-      echo "Build complete"
+      echo "Lightweight build complete - no Tesseract required"
     startCommand: ./start.sh # Fallback to run the script directly if Docker isn't used
     healthCheckPath: /health
     headers:

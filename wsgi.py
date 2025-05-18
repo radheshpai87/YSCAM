@@ -24,7 +24,7 @@ except ImportError:
 # Log environment information
 logger.info(f"Starting application with Python {sys.version}")
 logger.info(f"Working directory: {os.getcwd()}")
-logger.info(f"TESSERACT_AVAILABLE: {os.getenv('TESSERACT_AVAILABLE', 'Not set')}")
+logger.info(f"OCR_ENABLED: {os.getenv('OCR_ENABLED', 'Not set')}")
 logger.info(f"OCR_ENABLED: {os.getenv('OCR_ENABLED', 'Not set')}")
 logger.info(f"DOCKER_DEPLOYMENT: {os.getenv('DOCKER_DEPLOYMENT', 'Not set')}")
 

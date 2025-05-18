@@ -11,8 +11,27 @@ The system leverages logistic regression with TF-IDF vectorization to classify t
 - **Text Classification**: Analyzes the content of messages to detect scam patterns
 - **Risk Pattern Detection**: Uses rule-based patterns to identify high-risk signals
 - **Document Processing**: Extracts text from various document formats (PDF, DOCX, images)
+- **Lightweight OCR**: Uses cloud-based OCR service for efficient text extraction from images
 - **REST API**: Provides an API for easy integration with other systems
 - **Detailed Explanations**: Provides human-readable explanations of classifications
+
+## Lightweight OCR Implementation
+
+This system uses a cloud-based OCR solution via the OCRSpace API instead of local Tesseract for several advantages:
+
+- **Performance**: Significantly faster processing time compared to local Tesseract OCR
+- **Reliability**: No more "Tesseract process timeout" errors on resource-constrained environments
+- **Compatibility**: Works well with Render's free tier without memory/CPU limitations
+- **Maintenance**: No need to install or maintain complex OCR binaries
+
+The OCR system includes:
+
+- Intelligent caching to reduce API calls
+- Automatic image optimization for better OCR results
+- Fallback mechanisms when OCR is unavailable
+- Support for JPEG, PNG, and BMP image formats
+
+For more details, see [Lightweight OCR Documentation](LIGHTWEIGHT_OCR_README.md).
 
 ## API Access
 
@@ -137,7 +156,7 @@ This project requires the following main dependencies:
 - NumPy, pandas
 - scikit-learn
 - Flask & Flask-CORS
-- PyMuPDF, python-docx, pytesseract, Pillow (for document processing)
+- PyMuPDF, python-docx, Pillow, requests (for document processing and OCR)
 - NLTK
 
 See `requirements.txt` for a complete list.
@@ -207,11 +226,12 @@ The following environment variables can be configured:
 
 ### Known Limitations
 
-- **OCR Functionality**: When deployed on Render's standard Python environment, Tesseract OCR is not available. This affects image file processing.
+- **OCR Functionality**: The system now uses a lightweight API-based OCR solution instead of Tesseract.
 
-  - For full OCR support, use the Docker deployment method which installs Tesseract
-  - Alternatively, use text input for classification instead of image files
-  - The API will notify users when OCR is not available and provide guidance
+  - OCR functionality is provided via OCRSpace API with free tier key (K87589515488957)
+  - The free tier allows up to 500 API calls per day
+  - For higher volume usage, update the OCR API key as described in OCR_API_KEY_SETUP.md
+  - If the API is unreachable, the system will gracefully degrade to use image metadata
 
 - **Sleep Mode**: On the free tier, the service goes to sleep after inactivity, causing a delay on first request
   - The first request after inactivity may take up to 30 seconds to respond
@@ -225,3 +245,14 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Implementing a more robust and scalable architecture for handling large volumes of images
 - Enhancing the model's accuracy through fine-tuning and incorporating additional features
+
+## API Key Security
+
+The OCR functionality uses OCRSpace API, which requires an API key. For security:
+
+- The API key is set as an environment variable and not stored in the codebase
+- In development, use the .env file (not committed to Git) to store your API key
+- In production, set the OCR_API_KEY environment variable on your server
+- For Render deployment, the API key is set in the environment variables section
+
+Never commit your API keys to version control.

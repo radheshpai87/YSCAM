@@ -12,12 +12,13 @@ echo "Operating system: $(uname -a)"
 echo "User: $(whoami)"
 echo "PATH: $PATH"
 echo "RENDER: $RENDER"
-echo "TESSERACT_AVAILABLE: $TESSERACT_AVAILABLE"
+echo "OCR_ENABLED: $OCR_ENABLED"
 echo "DOCKER_DEPLOYMENT: $DOCKER_DEPLOYMENT"
 
-# Create a .env file to ensure Tesseract is properly detected
+# Create a .env file for lightweight OCR configuration
 echo "Creating .env file for environment configuration"
-echo "TESSERACT_AVAILABLE=True" > .env
+echo "OCR_ENABLED=True" > .env
+echo "OCR_API_KEY=${OCR_API_KEY:-K87589515488957}" >> .env
 echo "DOCKER_DEPLOYMENT=True" >> .env
 echo ".env file created with contents:"
 cat .env
