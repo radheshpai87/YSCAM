@@ -67,14 +67,55 @@ def initialize_models():
         return False
 
 @app.route('/health', methods=['GET', 'HEAD'])
-def health_check():
-    """API health check endpoint"""
+def health():
+    """Health check endpoint"""
     return jsonify({
+        "service": "SCAM Detection API",
         "status": "ok",
-        "timestamp": time.time(),
-        "model": "logistic_regression"
+        "timestamp": time.time()
     })
+
+@app.route('/ocr-status', methods=['GET'])
+def ocr_status():
+    """Checks Tesseract OCR availability and status"""
+    import os
+    from document_processor import TESSERACT_AVAILABLE
     
+    # Try to import and test pytesseract directly
+    tesseract_version = "Not available"
+    test_output = "Failed"
+    
+    try:
+        import pytesseract
+        tesseract_version = str(pytesseract.get_tesseract_version())
+        test_output = "Successful"
+    except Exception as e:
+        test_output = f"Failed: {str(e)}"
+    
+    # Check for tesseract binary
+    tesseract_binary = "Not found"
+    try:
+        import subprocess
+        result = subprocess.run(['which', 'tesseract'], 
+                           capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            tesseract_binary = result.stdout.strip()
+        else:
+            tesseract_binary = "Not found in PATH"
+    except Exception as e:
+        tesseract_binary = f"Error checking: {str(e)}"
+    
+    return jsonify({
+        "ocr_status": {
+            "tesseract_available": TESSERACT_AVAILABLE,
+            "tesseract_version": tesseract_version,
+            "tesseract_binary": tesseract_binary,
+            "test_import": test_output,
+            "env_var": os.getenv('TESSERACT_AVAILABLE', 'Not set')
+        },
+        "timestamp": time.time()
+    })
+
 @app.route('/', methods=['GET', 'HEAD'])
 def root():
     """Root endpoint for health checks"""

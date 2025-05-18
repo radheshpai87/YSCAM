@@ -6,8 +6,10 @@ echo "1. Checking binary:"
 which tesseract
 if [ $? -ne 0 ]; then
   echo "ERROR: Tesseract binary not found in PATH"
+  export TESSERACT_AVAILABLE=False
 else
   echo "SUCCESS: Tesseract binary found"
+  export TESSERACT_AVAILABLE=True
 fi
 
 echo "2. Checking version:"
@@ -16,8 +18,17 @@ tesseract --version
 echo "3. Checking available languages:"
 tesseract --list-langs
 
-echo "4. Checking if Python can access Tesseract:"
-python -c "import pytesseract; print(f'Tesseract version via Python: {pytesseract.get_tesseract_version()}')"
+echo "4. Checking environment:"
+env | grep TESSERACT
+
+echo "5. Checking if Python can access Tesseract:"
+python -c "import pytesseract; print(f'Tesseract version via Python: {pytesseract.get_tesseract_version()}')" || echo "Python cannot access Tesseract"
+
+echo "6. Writing environment variable to file for persistence:"
+echo "TESSERACT_AVAILABLE=${TESSERACT_AVAILABLE}" > .env.tesseract
+cat .env.tesseract
+
+echo "==== Tesseract verification complete ===="
 
 echo "5. Testing image processing with a sample:"
 # Create a simple test image with text

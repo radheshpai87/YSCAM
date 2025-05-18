@@ -2,17 +2,27 @@
 # build.sh
 set -o errexit
 
-# Render uses Ubuntu, and we need to modify the approach for system packages
-# Note: On Render, use their specific environment which should have tesseract pre-installed
-# or we need to use a different approach to handle OCR
+# This script runs in both Docker and non-Docker environments
+# In Docker, Tesseract is installed by the Dockerfile
+# For non-Docker, we need to check and handle appropriately
 
 echo "Checking for Tesseract availability..."
+
+# Check if we're in Docker (presence of marker file)
+if [ -f "/tesseract_installed" ]; then
+  echo "Running in Docker environment with Tesseract pre-installed"
+  echo "TESSERACT_AVAILABLE=True" > .env
+  tesseract --version
+  exit 0
+fi
+
+# For non-Docker environments
 if command -v tesseract >/dev/null 2>&1; then
   echo "Tesseract is already installed:"
   tesseract --version
+  echo "TESSERACT_AVAILABLE=True" > .env
 else
   echo "Tesseract is not available. Will configure application to use alternative processing."
-  # We'll handle the missing Tesseract in the code
   echo "TESSERACT_AVAILABLE=False" > .env
 fi
 
