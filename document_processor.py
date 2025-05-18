@@ -28,6 +28,21 @@ try:
     import pytesseract
     # Test if tesseract is actually accessible
     tesseract_version = pytesseract.get_tesseract_version()
+    print(f"Tesseract OCR detected, version: {tesseract_version}")
+    
+    # Check if tesseract binary is available in PATH
+    tesseract_cmd = pytesseract.pytesseract.tesseract_cmd
+    print(f"Tesseract command path: {tesseract_cmd}")
+    
+    # Try to execute tesseract directly using subprocess
+    import subprocess
+    try:
+        result = subprocess.run(['tesseract', '--version'], 
+                                capture_output=True, text=True, timeout=5)
+        print(f"Tesseract binary check: {result.stdout.strip()}")
+    except Exception as sub_e:
+        print(f"Could not execute tesseract binary: {sub_e}")
+        
 except (ImportError, Exception) as e:
     TESSERACT_AVAILABLE = False
     print(f"Warning: Tesseract OCR not available: {e}")
@@ -162,12 +177,35 @@ class DocumentProcessor:
         
         # Open the image
         try:
-            image = Image.open(image_path)
-            
-            # If Tesseract is not available, extract some basic info about the image
+            # Check Tesseract availability first with more detailed logging
             if not TESSERACT_AVAILABLE:
                 logger.warning("Tesseract OCR is not available in this environment")
-                # Get image details to return some useful information
+                try:
+                    # Try one more time to find tesseract
+                    import subprocess
+                    result = subprocess.run(['which', 'tesseract'], 
+                                          capture_output=True, text=True, check=False)
+                    if result.stdout.strip():
+                        logger.info(f"Tesseract binary found at: {result.stdout.strip()}")
+                        # Try to update the pytesseract command path
+                        try:
+                            import pytesseract
+                            pytesseract.pytesseract.tesseract_cmd = result.stdout.strip()
+                            logger.info("Updated pytesseract command path")
+                            TESSERACT_AVAILABLE = True
+                        except Exception as e:
+                            logger.error(f"Failed to update pytesseract command: {e}")
+                    else:
+                        logger.warning("Tesseract binary not found in PATH")
+                except Exception as e:
+                    logger.error(f"Error checking for tesseract: {e}")
+            
+            # Open the image file
+            image = Image.open(image_path)
+            logger.info(f"Image opened successfully: {image.format} {image.size}")
+            
+            # If Tesseract is still not available, extract basic info about the image
+            if not TESSERACT_AVAILABLE:
                 width, height = image.size
                 format_type = image.format
                 mode = image.mode
@@ -180,17 +218,29 @@ class DocumentProcessor:
                 )
                 
                 return placeholder
-                
+            
             # Check if tesseract is installed
-            tesseract_version = pytesseract.get_tesseract_version()
-            logger.info(f"Using Tesseract version: {tesseract_version}")
+            try:
+                tesseract_version = pytesseract.get_tesseract_version()
+                logger.info(f"Using Tesseract version: {tesseract_version}")
+            except Exception as e:
+                logger.error(f"Error getting Tesseract version: {e}")
+                # Fall back to system command to check tesseract
+                try:
+                    import subprocess
+                    result = subprocess.run(['tesseract', '--version'], 
+                                          capture_output=True, text=True, check=False)
+                    logger.info(f"Tesseract version from system: {result.stdout.strip()}")
+                except Exception as sub_e:
+                    logger.error(f"Failed to check tesseract version from system: {sub_e}")
+                    return "[OCR ERROR: Could not verify Tesseract installation]"
             
             # Convert to RGB mode if needed (some images have alpha channels)
             if image.mode != 'RGB':
                 logger.info(f"Converting image from {image.mode} to RGB mode")
                 image = image.convert('RGB')
                 
-            logger.info(f"Image size: {image.size}, mode: {image.mode}")
+            logger.info(f"Image ready for OCR: size={image.size}, mode={image.mode}")
             
             # Enhance image for better OCR results
             from PIL import ImageEnhance, ImageFilter
