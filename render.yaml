@@ -1,10 +1,14 @@
 services:
   - type: web
     name: scam-detection-api
-    env: docker
+    env: docker  # Ensure this is set to docker for Docker-based deployment
     region: oregon
     dockerfilePath: ./Dockerfile
-    dockerCommand: gunicorn --bind 0.0.0.0:$PORT --workers=2 --timeout=120 wsgi:app --log-level=info
+    dockerCommand: >-
+      bash -c "
+      echo 'TESSERACT_AVAILABLE=True' > .env && 
+      if tesseract --version; then echo 'Tesseract verified'; else echo 'Tesseract not found'; fi && 
+      gunicorn --bind 0.0.0.0:$PORT --workers=2 --timeout=120 wsgi:app --log-level=info"
     buildCommand: ./render_build.sh
     envVars:
       - key: PORT
@@ -15,8 +19,12 @@ services:
         value: "True"
       - key: OCR_ENABLED
         value: "True"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PATH  # Add tesseract to the PATH
+        value: "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin"
     plan: free
-    healthCheckPath: /health
+    healthCheckPath: /ocr-status  # Use our detailed OCR status endpoint for health checks
     headers:
       - path: /*
         name: Access-Control-Allow-Origin
