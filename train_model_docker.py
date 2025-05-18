@@ -18,7 +18,7 @@ def train_model():
     print("=== Starting model training during Docker build ===")
     
     # Check if the dataset file exists
-    dataset_file = "expanded_indian_job_loan_dataset_with_edge_cases.csv"
+    dataset_file = "yscam_massive_dataset.csv"
     if not os.path.exists(dataset_file):
         print(f"Error: Dataset file '{dataset_file}' not found.")
         return False
