@@ -26,10 +26,27 @@ except ImportError:
     # dotenv not available, just continue
     pass
 
-# Check for Tesseract availability - read from environment or file
-TESSERACT_AVAILABLE = os.getenv('TESSERACT_AVAILABLE', 'True').lower() != 'false'
+# Check for Tesseract availability from multiple sources
+env_var = os.getenv('TESSERACT_AVAILABLE', '')
+env_file_var = ''
 
-# Additional metrics for diagnostics
+# Try to read from .env file if it exists
+if os.path.exists('.env'):
+    with open('.env', 'r') as f:
+        for line in f:
+            if line.startswith('TESSERACT_AVAILABLE='):
+                env_file_var = line.strip().split('=')[1].strip('"\'')
+
+# Check Docker marker file
+docker_marker = os.path.exists('/tesseract_installed')
+
+# Initialize OCR availability flag based on environment
+TESSERACT_AVAILABLE = (env_var.lower() == 'true' or 
+                      env_file_var.lower() == 'true' or 
+                      docker_marker or 
+                      (not env_var and not env_file_var))  # Default to True if not set
+
+# Initialize diagnostics metrics
 OCR_METRICS = {
     "tesseract_version": "Unknown",
     "tesseract_path": "Unknown",
@@ -38,41 +55,100 @@ OCR_METRICS = {
     "last_error": None,
     "images_processed": 0,
     "successful_extractions": 0,
-    "fallback_used": 0
+    "fallback_used": 0,
+    "env_checks": {
+        "env_var": env_var,
+        "env_file_var": env_file_var,
+        "docker_marker": docker_marker,
+        "initial_setting": TESSERACT_AVAILABLE
+    }
 }
 
+# Define common tesseract paths to check
+tesseract_common_paths = [
+    'tesseract',  # Default PATH lookup
+    '/usr/bin/tesseract',
+    '/usr/local/bin/tesseract',
+    '/app/usr/bin/tesseract',
+    '/opt/homebrew/bin/tesseract',
+    '/usr/share/tesseract-ocr/tesseract'
+]
+
+# Try multiple methods to detect and configure Tesseract
+tesseract_found = False
+
+# Method 1: Try to import pytesseract and get version directly
 try:
     import pytesseract
     # Test if tesseract is actually accessible
     tesseract_version = pytesseract.get_tesseract_version()
     OCR_METRICS["tesseract_version"] = str(tesseract_version)
+    OCR_METRICS["tesseract_path"] = pytesseract.pytesseract.tesseract_cmd
     OCR_METRICS["import_success"] = True
-    print(f"Tesseract OCR detected, version: {tesseract_version}")
+    tesseract_found = True
+    print(f"Tesseract OCR detected via Python import, version: {tesseract_version}")
+except Exception as import_error:
+    OCR_METRICS["import_error"] = str(import_error)
+    print(f"Pytesseract import issue: {import_error}")
     
-    # Check if tesseract binary is available in PATH
-    tesseract_cmd = pytesseract.pytesseract.tesseract_cmd
-    OCR_METRICS["tesseract_path"] = tesseract_cmd
-    print(f"Tesseract command path: {tesseract_cmd}")
-    
-    # Try to execute tesseract directly using subprocess
+    # Method 2: Check if the binary exists in any common locations
     import subprocess
-    try:
-        result = subprocess.run(['tesseract', '--version'], 
-                                capture_output=True, text=True, timeout=5)
-        binary_output = result.stdout.strip()
-        OCR_METRICS["binary_check"] = "Success: " + binary_output
-        print(f"Tesseract binary check: {binary_output}")
-    except Exception as sub_e:
-        OCR_METRICS["binary_check"] = f"Failed: {str(sub_e)}"
-        print(f"Could not execute tesseract binary: {sub_e}")
-        TESSERACT_AVAILABLE = False
-        
-except (ImportError, Exception) as e:
-    TESSERACT_AVAILABLE = False
-    OCR_METRICS["import_success"] = False
-    OCR_METRICS["last_error"] = str(e)
-    print(f"Warning: Tesseract OCR not available: {e}")
+    for path in tesseract_common_paths:
+        try:
+            # Check if binary exists and is executable
+            if path != 'tesseract' and (not os.path.exists(path) or not os.access(path, os.X_OK)):
+                continue
+                
+            # Try to run version check
+            cmd = [path, '--version']
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                binary_output = result.stdout.strip()
+                OCR_METRICS["binary_check"] = f"Success with {path}: {binary_output}"
+                print(f"Tesseract binary found at {path}: {binary_output}")
+                
+                # Try to configure pytesseract with this path
+                if 'pytesseract' in sys.modules:
+                    pytesseract.pytesseract.tesseract_cmd = path
+                    OCR_METRICS["tesseract_path"] = path
+                    tesseract_found = True
+                    # Verify it works
+                    try:
+                        version = pytesseract.get_tesseract_version()
+                        OCR_METRICS["tesseract_version"] = str(version)
+                        OCR_METRICS["recovery"] = f"Recovered using {path}"
+                        print(f"Successfully configured pytesseract with {path}")
+                        break
+                    except Exception as verify_error:
+                        OCR_METRICS[f"verify_error_{path}"] = str(verify_error)
+                else:
+                    # Try importing again after finding the binary
+                    try:
+                        import pytesseract
+                        pytesseract.pytesseract.tesseract_cmd = path
+                        version = pytesseract.get_tesseract_version()
+                        OCR_METRICS["tesseract_version"] = str(version)
+                        OCR_METRICS["tesseract_path"] = path
+                        OCR_METRICS["import_success"] = True
+                        OCR_METRICS["recovery"] = f"Imported after finding binary at {path}"
+                        tesseract_found = True
+                        print(f"Successfully imported pytesseract after finding binary at {path}")
+                        break
+                    except Exception as reimport_error:
+                        OCR_METRICS[f"reimport_error_{path}"] = str(reimport_error)
+        except Exception as path_error:
+            OCR_METRICS[f"path_error_{path}"] = str(path_error)
+
+# Update availability flag based on our checks
+TESSERACT_AVAILABLE = tesseract_found
+
+if not tesseract_found:
+    print("Warning: Tesseract OCR not available after all checks")
     print("Image text extraction will be limited.")
+    OCR_METRICS["final_status"] = "Not available"
+else:
+    print(f"Tesseract OCR is available: {OCR_METRICS['tesseract_path']}")
+    OCR_METRICS["final_status"] = "Available"
 
 # Configure logging
 logging.basicConfig(

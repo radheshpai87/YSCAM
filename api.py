@@ -77,42 +77,112 @@ def health():
 
 @app.route('/ocr-status', methods=['GET'])
 def ocr_status():
-    """Checks Tesseract OCR availability and status"""
+    """Checks Tesseract OCR availability and status with comprehensive diagnostics"""
     import os
-    from document_processor import TESSERACT_AVAILABLE
+    import sys
+    import platform
+    from document_processor import TESSERACT_AVAILABLE, OCR_METRICS
+    
+    # Prepare diagnostics data
+    diagnostics = {
+        "system_info": {
+            "python_version": sys.version,
+            "platform": platform.platform(),
+            "is_docker": os.path.exists("/.dockerenv") or os.getenv('DOCKER_DEPLOYMENT') == 'True',
+            "working_directory": os.getcwd()
+        },
+        "environment": {
+            "env_var": os.getenv('TESSERACT_AVAILABLE', 'Not set'),
+            "path": os.getenv('PATH', 'Not set'),
+            "python_path": os.getenv('PYTHONPATH', 'Not set')
+        },
+        "ocr_metrics": OCR_METRICS if 'OCR_METRICS' in dir() else {"error": "OCR_METRICS not available"}
+    }
     
     # Try to import and test pytesseract directly
     tesseract_version = "Not available"
     test_output = "Failed"
+    available = False
     
+    # Try multiple methods to locate and validate Tesseract
     try:
+        # Method 1: Import pytesseract and get version
         import pytesseract
         tesseract_version = str(pytesseract.get_tesseract_version())
+        diagnostics["pytesseract_cmd"] = pytesseract.pytesseract.tesseract_cmd
         test_output = "Successful"
+        available = True
     except Exception as e:
         test_output = f"Failed: {str(e)}"
+        diagnostics["import_error"] = str(e)
+        
+        # Method 2: Check common installation locations
+        for path in ['/usr/bin/tesseract', '/usr/local/bin/tesseract', '/app/usr/bin/tesseract']:
+            if os.path.exists(path) and os.access(path, os.X_OK):
+                diagnostics["found_executable"] = path
+                try:
+                    import pytesseract
+                    pytesseract.pytesseract.tesseract_cmd = path
+                    tesseract_version = str(pytesseract.get_tesseract_version())
+                    test_output = f"Recovery successful using {path}"
+                    available = True
+                    break
+                except Exception as recovery_error:
+                    diagnostics["recovery_error"] = str(recovery_error)
     
-    # Check for tesseract binary
+    # Method 3: Check using subprocess
     tesseract_binary = "Not found"
     try:
         import subprocess
-        result = subprocess.run(['which', 'tesseract'], 
-                           capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            tesseract_binary = result.stdout.strip()
-        else:
-            tesseract_binary = "Not found in PATH"
+        commands_to_try = [
+            ['which', 'tesseract'],
+            ['whereis', 'tesseract'],
+            ['find', '/', '-name', 'tesseract', '-type', 'f', '-executable']
+        ]
+        
+        for cmd in commands_to_try:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and result.stdout.strip():
+                    tesseract_binary = result.stdout.strip()
+                    diagnostics["cmd_used"] = ' '.join(cmd)
+                    
+                    # Try to verify it works
+                    version_check = subprocess.run([tesseract_binary, '--version'], 
+                                                 capture_output=True, text=True, timeout=5)
+                    if version_check.returncode == 0:
+                        diagnostics["binary_version"] = version_check.stdout.strip()
+                        if not available:  # Only update if previous methods failed
+                            available = True
+                            tesseract_version = version_check.stdout.split('\n')[0]
+                            test_output = "Found via system command"
+                    break
+            except Exception as subcmd_error:
+                diagnostics[f"cmd_error_{' '.join(cmd)}"] = str(subcmd_error)
     except Exception as e:
         tesseract_binary = f"Error checking: {str(e)}"
+        diagnostics["subprocess_error"] = str(e)
+    
+    # Try to fix tesseract issues if detected
+    if not available and not TESSERACT_AVAILABLE:
+        diagnostics["fix_attempt"] = "Attempted to install tesseract"
+        try:
+            import subprocess
+            fix_cmd = subprocess.run(['apt-get', 'update', '&&', 'apt-get', 'install', '-y', 'tesseract-ocr'],
+                                    shell=True, capture_output=True, text=True, timeout=60)
+            diagnostics["fix_result"] = fix_cmd.stdout + "\n" + fix_cmd.stderr
+        except Exception as fix_error:
+            diagnostics["fix_error"] = str(fix_error)
     
     return jsonify({
         "ocr_status": {
-            "tesseract_available": TESSERACT_AVAILABLE,
+            "tesseract_available": available or TESSERACT_AVAILABLE,
             "tesseract_version": tesseract_version,
             "tesseract_binary": tesseract_binary,
             "test_import": test_output,
             "env_var": os.getenv('TESSERACT_AVAILABLE', 'Not set')
         },
+        "diagnostics": diagnostics,
         "timestamp": time.time()
     })
 
