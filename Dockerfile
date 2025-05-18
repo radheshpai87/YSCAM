@@ -39,7 +39,7 @@ RUN mkdir -p ./logs ./tmp
 COPY . .
 
 # Make all scripts executable
-RUN chmod +x build.sh verify_docker.sh
+RUN chmod +x build.sh verify_docker.sh train_model_docker.py
 
 # Run verification scripts
 RUN echo "=== Running Docker environment verification ===" && \
@@ -47,6 +47,15 @@ RUN echo "=== Running Docker environment verification ===" && \
     cat docker_verification.log && \
     echo "=== Running Lightweight OCR verification ===" && \
     python -c "import lightweight_ocr; print('Lightweight OCR module imported successfully')" > lightweight_ocr_results.txt || echo "OCR test completed with notes"
+
+# Train the model during build process
+RUN echo "=== Training logistic regression model with expanded dataset ===" && \
+    python train_model_docker.py > model_training.log && \
+    cat model_training.log && \
+    echo "=== Verifying model loading and inference ===" && \
+    chmod +x test_model_loading.py && \
+    python test_model_loading.py > model_verification.log && \
+    cat model_verification.log
 
 # Set environment variables
 ENV PYTHONPATH=/app

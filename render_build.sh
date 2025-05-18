@@ -6,6 +6,10 @@ echo "Current directory: $(pwd)"
 echo "Directory contents:"
 ls -la
 
+# Ensure models directory exists
+mkdir -p models
+echo "Created models directory (if it didn't exist)"
+
 # Create diagnostic information for debugging
 echo "===== ENVIRONMENT DIAGNOSTICS ====="
 echo "Operating system: $(uname -a)"

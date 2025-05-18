@@ -28,6 +28,23 @@ mkdir -p ocr_cache
 echo "Created OCR cache directory"
 echo "OCR_ENABLED=True" >> .env
 
+# Ensure models directory exists
+mkdir -p models
+echo "Created models directory (if it doesn't exist)"
+
+# Check if model file exists, if not train the model
+if [ ! -f "models/logistic_regression_model.pkl" ]; then
+    echo "Model not found, training now..."
+    python train_model_docker.py
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Model training failed. Please check the logs."
+    else
+        echo "Model trained and saved successfully."
+    fi
+else
+    echo "Found existing trained model in models/logistic_regression_model.pkl"
+fi
+
 # Set default port
 [ -z "$PORT" ] && export PORT=10000
 

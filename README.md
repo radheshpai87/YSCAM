@@ -4,7 +4,7 @@ This project implements a machine learning-based text classification system that
 
 ## Overview
 
-The system leverages logistic regression with TF-IDF vectorization to classify text messages as either "real" or "scam". It provides a complete pipeline from data preparation to model evaluation and explainability.
+The system leverages logistic regression with TF-IDF vectorization to classify text messages as either "real" or "scam". It provides a complete pipeline from data preparation to model evaluation and explainability. The model is automatically trained during Docker build and deployment, ensuring the system is ready to use immediately after deployment.
 
 ## Key Features
 
@@ -29,6 +29,19 @@ The OCR system includes:
 - Intelligent caching to reduce API calls
 - Automatic image optimization for better OCR results
 - Fallback mechanisms when OCR is unavailable
+
+## Automatic Model Training During Deployment
+
+The system is designed to automatically train the machine learning model during deployment:
+
+- **Docker Build Integration**: The model is trained as part of the Docker build process
+- **Expanded Dataset**: Uses the expanded dataset with edge cases for improved accuracy
+- **Render Deployment Ready**: No need for manual model training before deployment
+- **Fallback Mechanism**: If the model isn't found during startup, it will be trained automatically
+- **Performance Metrics**: Training metrics are logged during the build process
+
+This ensures that the model is always up-to-date with the latest dataset and ready to use immediately after deployment.
+
 - Support for JPEG, PNG, and BMP image formats
 
 For more details, see [Lightweight OCR Documentation](LIGHTWEIGHT_OCR_README.md).
