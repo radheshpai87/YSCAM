@@ -3,7 +3,21 @@ services:
     name: scam-detection-api
     env: docker
     region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerCommand: gunicorn --bind 0.0.0.0:$PORT --workers=2 --timeout=120 wsgi:app --log-level=info
+    buildCommand: ./render_build.sh
     envVars:
       - key: PORT
         value: 10000
+      - key: TESSERACT_AVAILABLE
+        value: "True"
+      - key: DOCKER_DEPLOYMENT
+        value: "True"
+      - key: OCR_ENABLED
+        value: "True"
     plan: free
+    healthCheckPath: /health
+    headers:
+      - path: /*
+        name: Access-Control-Allow-Origin
+        value: "*"
