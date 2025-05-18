@@ -75,13 +75,6 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 # Make the startup script executable and use it as entry point
 RUN chmod +x start.sh
+
+# Use the start.sh script as the entry point
 CMD ["./start.sh"]
-        echo "Tesseract is properly installed" && \
-        which tesseract && \
-        tesseract --list-langs && \
-        python -c "import pytesseract; print(f'Tesseract version: {pytesseract.get_tesseract_version()}'); print(f'Tesseract path: {pytesseract.pytesseract.tesseract_cmd}')" && \
-        echo "Starting SCAM Detection API with OCR capabilities..."; \
-    else \
-        echo "WARNING: Tesseract not found, will run with limited OCR capability"; \
-    fi && \
-    gunicorn --bind 0.0.0.0:$PORT --workers=2 --timeout=120 wsgi:app --log-level=info --log-file=-
