@@ -1,13 +1,13 @@
 services:
   - type: web
     name: scam-detection-api
-    runtime: docker  # Explicitly set runtime to docker
-    env: docker      # Set environment to docker as well
+    runtime: docker # Explicitly set runtime to docker
+    env: docker # Set environment to docker as well
     region: oregon
     plan: free
-    dockerfilePath: ./Dockerfile   # Explicit path to Dockerfile
-    dockerContext: .              # Build context is the current dir
-    dockerCommand: ./start.sh     # Use our universal startup script in Docker
+    dockerfilePath: ./Dockerfile # Explicit path to Dockerfile
+    dockerContext: . # Build context is the current dir
+    dockerCommand: ./start.sh # Use our universal startup script in Docker
     envVars:
       - key: PORT
         value: 10000
@@ -21,7 +21,7 @@ services:
       chmod +x ./render_install_tesseract.sh &&
       chmod +x ./start.sh &&
       echo "Build complete"
-    startCommand: ./start.sh  # Fallback to run the script directly if Docker isn't used
+    startCommand: ./start.sh # Fallback to run the script directly if Docker isn't used
     healthCheckPath: /health
     headers:
       - path: /*
