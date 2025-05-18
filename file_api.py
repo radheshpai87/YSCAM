@@ -79,12 +79,26 @@ def upload_and_detect():
         # Extract text from the document
         text = get_document_text(file_content, ext)
         
+        # Check if text extraction was successful
         if not text:
             logger.error(f"Failed to extract text from {file.filename} of type {ext}")
             return jsonify({
                 "error": f"Could not extract text from the {ext} file.",
                 "details": "The image may not contain readable text, or there might be issues with the OCR system. Try with a clearer image."
             }), 400
+            
+        # Check if we got the OCR not available placeholder
+        if "[OCR not available in this environment]" in text:
+            logger.warning(f"OCR not available for {file.filename} - providing limited functionality")
+            
+            # For image files, provide a special message
+            if ext.lower() in ['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'tif', 'gif']:
+                return jsonify({
+                    "warning": "OCR is not available in this deployment environment",
+                    "filename": file.filename,
+                    "text": text,
+                    "suggestion": "For image processing, please try using the direct text input instead, or use the command-line version with Tesseract installed."
+                }), 200
         
         # Get model and vectorizer if not already loaded
         global model, vectorizer

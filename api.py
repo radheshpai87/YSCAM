@@ -25,9 +25,9 @@ logger = logging.getLogger("scam-api")
 # Initialize Flask app
 app = Flask(__name__)
 
-# Enable CORS for API access
+# Enable CORS for API access with specific configuration
 from flask_cors import CORS
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Global variables to store model and vectorizer
 model = None
@@ -66,13 +66,22 @@ def initialize_models():
         logger.error(f"Error initializing models: {str(e)}", exc_info=True)
         return False
 
-@app.route('/health', methods=['GET'])
+@app.route('/health', methods=['GET', 'HEAD'])
 def health_check():
     """API health check endpoint"""
     return jsonify({
         "status": "ok",
         "timestamp": time.time(),
         "model": "logistic_regression"
+    })
+    
+@app.route('/', methods=['GET', 'HEAD'])
+def root():
+    """Root endpoint for health checks"""
+    return jsonify({
+        "service": "SCAM Detection API",
+        "status": "ok",
+        "timestamp": time.time()
     })
 
 @app.route('/detect', methods=['POST'])
@@ -209,6 +218,15 @@ def detect_scam():
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+@app.errorhandler(404)
+def not_found(e):
+    """Handle 404 errors gracefully"""
+    return jsonify({
+        "error": "Endpoint not found",
+        "status": "error",
+        "message": "The requested endpoint does not exist. Please check the API documentation."
+    }), 404
 
 if __name__ == "__main__":
     # Initialize models at startup

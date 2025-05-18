@@ -164,10 +164,22 @@ class DocumentProcessor:
         try:
             image = Image.open(image_path)
             
-            # If Tesseract is not available, return a message
+            # If Tesseract is not available, extract some basic info about the image
             if not TESSERACT_AVAILABLE:
                 logger.warning("Tesseract OCR is not available in this environment")
-                return "[Image content - OCR not available in this environment]"
+                # Get image details to return some useful information
+                width, height = image.size
+                format_type = image.format
+                mode = image.mode
+                
+                # Create a placeholder message with image metadata
+                placeholder = (
+                    f"[This is an image with dimensions {width}x{height} ({format_type}, {mode}). "
+                    f"OCR text extraction is not available in this environment. "
+                    f"Please use text-based input or try uploading to a different OCR service.]"
+                )
+                
+                return placeholder
                 
             # Check if tesseract is installed
             tesseract_version = pytesseract.get_tesseract_version()

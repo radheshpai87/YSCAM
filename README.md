@@ -205,6 +205,17 @@ The following environment variables can be configured:
 - For production use, consider upgrading to a paid plan
 - Large model files may exceed free plan storage limits
 
+### Known Limitations
+
+- **OCR Functionality**: When deployed on Render's standard Python environment, Tesseract OCR is not available. This affects image file processing.
+  - For full OCR support, use the Docker deployment method which installs Tesseract
+  - Alternatively, use text input for classification instead of image files
+  - The API will notify users when OCR is not available and provide guidance
+
+- **Sleep Mode**: On the free tier, the service goes to sleep after inactivity, causing a delay on first request
+  - The first request after inactivity may take up to 30 seconds to respond
+  - Subsequent requests will be much faster
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
