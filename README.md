@@ -208,6 +208,7 @@ The following environment variables can be configured:
 ### Known Limitations
 
 - **OCR Functionality**: When deployed on Render's standard Python environment, Tesseract OCR is not available. This affects image file processing.
+
   - For full OCR support, use the Docker deployment method which installs Tesseract
   - Alternatively, use text input for classification instead of image files
   - The API will notify users when OCR is not available and provide guidance
@@ -220,6 +221,7 @@ The following environment variables can be configured:
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Future Plans for Improvements 
+## Future Plans for Improvements
+
 - Implementing a more robust and scalable architecture for handling large volumes of images
 - Enhancing the model's accuracy through fine-tuning and incorporating additional features
