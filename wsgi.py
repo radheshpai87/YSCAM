@@ -5,6 +5,30 @@
 WSGI entry point for the SCAM Detection API
 """
 
+import os
+import sys
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("wsgi")
+
+# Try to load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("Environment variables loaded from .env file")
+except ImportError:
+    logger.info("python-dotenv not installed, using system environment variables")
+
+# Log environment information
+logger.info(f"Starting application with Python {sys.version}")
+logger.info(f"Working directory: {os.getcwd()}")
+logger.info(f"TESSERACT_AVAILABLE: {os.getenv('TESSERACT_AVAILABLE', 'Not set')}")
+logger.info(f"OCR_ENABLED: {os.getenv('OCR_ENABLED', 'Not set')}")
+logger.info(f"DOCKER_DEPLOYMENT: {os.getenv('DOCKER_DEPLOYMENT', 'Not set')}")
+
+# Import application components
 from api import app, initialize_models, model, vectorizer
 from file_api import register_file_blueprint
 

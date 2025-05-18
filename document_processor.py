@@ -11,6 +11,7 @@ for processing by the SCAM detection system.
 import os
 import sys
 import logging
+import time
 from PIL import Image
 import docx
 import fitz  # PyMuPDF
@@ -22,31 +23,13 @@ try:
     from dotenv import load_dotenv
     # Load environment variables
     load_dotenv()
+    print("Environment variables loaded from .env file")
 except ImportError:
     # dotenv not available, just continue
+    print("dotenv module not available, using direct environment variables")
     pass
 
-# Check for Tesseract availability from multiple sources
-env_var = os.getenv('TESSERACT_AVAILABLE', '')
-env_file_var = ''
-
-# Try to read from .env file if it exists
-if os.path.exists('.env'):
-    with open('.env', 'r') as f:
-        for line in f:
-            if line.startswith('TESSERACT_AVAILABLE='):
-                env_file_var = line.strip().split('=')[1].strip('"\'')
-
-# Check Docker marker file
-docker_marker = os.path.exists('/tesseract_installed')
-
-# Initialize OCR availability flag based on environment
-TESSERACT_AVAILABLE = (env_var.lower() == 'true' or 
-                      env_file_var.lower() == 'true' or 
-                      docker_marker or 
-                      (not env_var and not env_file_var))  # Default to True if not set
-
-# Initialize diagnostics metrics
+# Initialize OCR metrics and availability flag
 OCR_METRICS = {
     "tesseract_version": "Unknown",
     "tesseract_path": "Unknown",
@@ -57,98 +40,152 @@ OCR_METRICS = {
     "successful_extractions": 0,
     "fallback_used": 0,
     "env_checks": {
-        "env_var": env_var,
-        "env_file_var": env_file_var,
-        "docker_marker": docker_marker,
-        "initial_setting": TESSERACT_AVAILABLE
+        "env_var": os.getenv('TESSERACT_AVAILABLE', 'Not set'),
+        "docker_marker": os.path.exists('/.dockerenv') or os.getenv('DOCKER_DEPLOYMENT') == 'True'
     }
 }
 
-# Define common tesseract paths to check
-tesseract_common_paths = [
-    'tesseract',  # Default PATH lookup
-    '/usr/bin/tesseract',
-    '/usr/local/bin/tesseract',
-    '/app/usr/bin/tesseract',
-    '/opt/homebrew/bin/tesseract',
-    '/usr/share/tesseract-ocr/tesseract'
-]
+# Default to False until we can verify Tesseract is available
+TESSERACT_AVAILABLE = False
 
-# Try multiple methods to detect and configure Tesseract
-tesseract_found = False
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.info("Document processor initializing...")
 
-# Method 1: Try to import pytesseract and get version directly
-try:
-    import pytesseract
-    # Test if tesseract is actually accessible
-    tesseract_version = pytesseract.get_tesseract_version()
-    OCR_METRICS["tesseract_version"] = str(tesseract_version)
-    OCR_METRICS["tesseract_path"] = pytesseract.pytesseract.tesseract_cmd
-    OCR_METRICS["import_success"] = True
-    tesseract_found = True
-    print(f"Tesseract OCR detected via Python import, version: {tesseract_version}")
-except Exception as import_error:
-    OCR_METRICS["import_error"] = str(import_error)
-    print(f"Pytesseract import issue: {import_error}")
+# Function to check for Tesseract - can be called multiple times if needed
+def check_tesseract_availability():
+    """
+    Comprehensive check for Tesseract OCR availability using multiple detection methods
     
-    # Method 2: Check if the binary exists in any common locations
-    import subprocess
-    for path in tesseract_common_paths:
+    Returns:
+        bool: True if Tesseract is available, False otherwise
+    """
+    global OCR_METRICS
+    
+    # Record current time for performance tracking
+    start_time = time.time()
+    
+    # Check for explicit environment settings (highest priority)
+    env_setting = os.getenv('TESSERACT_AVAILABLE', '').lower() == 'true'
+    ocr_enabled = os.getenv('OCR_ENABLED', '').lower() != 'false'  # Default to True unless explicitly set to false
+    
+    # Update metrics with environment checks
+    OCR_METRICS["env_checks"] = {
+        "env_var": os.getenv('TESSERACT_AVAILABLE', 'Not set'),
+        "ocr_enabled": os.getenv('OCR_ENABLED', 'Not set'),
+        "docker_marker": os.path.exists('/.dockerenv') or os.getenv('DOCKER_DEPLOYMENT') == 'True',
+        "tesseract_cmd": os.getenv('TESSERACT_CMD', 'Not set')
+    }
+    
+    # If OCR is explicitly disabled, don't even try
+    if ocr_enabled is False:
+        logger.info("OCR is explicitly disabled via OCR_ENABLED=False")
+        return False
+    
+    # Method 1: Look for explicit Tesseract path in environment
+    custom_path = os.getenv('TESSERACT_CMD')
+    if custom_path and os.path.exists(custom_path) and os.access(custom_path, os.X_OK):
+        OCR_METRICS["tesseract_path"] = custom_path
+        logger.info(f"Found custom Tesseract path: {custom_path}")
+        
+        # Try to use this path with pytesseract
         try:
-            # Check if binary exists and is executable
-            if path != 'tesseract' and (not os.path.exists(path) or not os.access(path, os.X_OK)):
-                continue
-                
-            # Try to run version check
-            cmd = [path, '--version']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            import pytesseract
+            pytesseract.pytesseract.tesseract_cmd = custom_path
+            version = pytesseract.get_tesseract_version()
+            OCR_METRICS["tesseract_version"] = str(version)
+            OCR_METRICS["import_success"] = True
+            logger.info(f"Tesseract verified via custom path: version {version}")
+            return True
+        except Exception as e:
+            logger.warning(f"Custom Tesseract path exists but pytesseract failed: {e}")
+    
+    # Method 2: Try to import and check pytesseract with system default
+    try:
+        import pytesseract
+        version = pytesseract.get_tesseract_version()
+        OCR_METRICS["tesseract_version"] = str(version)
+        OCR_METRICS["tesseract_path"] = pytesseract.pytesseract.tesseract_cmd
+        OCR_METRICS["import_success"] = True
+        logger.info(f"Tesseract found via pytesseract import: version {version}")
+        return True
+    except Exception as e:
+        OCR_METRICS["pytesseract_error"] = str(e)
+        logger.warning(f"Could not verify Tesseract via pytesseract: {e}")
+    
+    # Method 3: Check common binary locations directly
+    tesseract_paths = [
+        'tesseract',  # System PATH
+        '/usr/bin/tesseract',
+        '/usr/local/bin/tesseract',
+        '/app/bin/tesseract'
+    ]
+    
+    for path in tesseract_paths:
+        try:
+            import subprocess
+            logger.info(f"Checking for Tesseract binary at: {path}")
+            result = subprocess.run([path, '--version'], capture_output=True, text=True, check=False, timeout=5)
+            
             if result.returncode == 0:
-                binary_output = result.stdout.strip()
-                OCR_METRICS["binary_check"] = f"Success with {path}: {binary_output}"
-                print(f"Tesseract binary found at {path}: {binary_output}")
+                OCR_METRICS["binary_check"] = f"Success at {path}: {result.stdout.strip()}"
+                logger.info(f"Tesseract binary found at {path}: {result.stdout.strip()}")
                 
                 # Try to configure pytesseract with this path
-                if 'pytesseract' in sys.modules:
+                try:
+                    import pytesseract
                     pytesseract.pytesseract.tesseract_cmd = path
+                    version = pytesseract.get_tesseract_version()
+                    OCR_METRICS["tesseract_version"] = str(version)
                     OCR_METRICS["tesseract_path"] = path
-                    tesseract_found = True
-                    # Verify it works
+                    OCR_METRICS["import_success"] = True
+                    
+                    # Write this successful path to .env file for future use
                     try:
-                        version = pytesseract.get_tesseract_version()
-                        OCR_METRICS["tesseract_version"] = str(version)
-                        OCR_METRICS["recovery"] = f"Recovered using {path}"
-                        print(f"Successfully configured pytesseract with {path}")
-                        break
-                    except Exception as verify_error:
-                        OCR_METRICS[f"verify_error_{path}"] = str(verify_error)
-                else:
-                    # Try importing again after finding the binary
-                    try:
-                        import pytesseract
-                        pytesseract.pytesseract.tesseract_cmd = path
-                        version = pytesseract.get_tesseract_version()
-                        OCR_METRICS["tesseract_version"] = str(version)
-                        OCR_METRICS["tesseract_path"] = path
-                        OCR_METRICS["import_success"] = True
-                        OCR_METRICS["recovery"] = f"Imported after finding binary at {path}"
-                        tesseract_found = True
-                        print(f"Successfully imported pytesseract after finding binary at {path}")
-                        break
-                    except Exception as reimport_error:
-                        OCR_METRICS[f"reimport_error_{path}"] = str(reimport_error)
-        except Exception as path_error:
-            OCR_METRICS[f"path_error_{path}"] = str(path_error)
+                        with open(".env", "a") as env_file:
+                            env_file.write(f"\nTESSERACT_CMD={path}")
+                    except:
+                        pass  # Ignore if we can't update .env
+                        
+                    return True
+                except Exception as config_error:
+                    OCR_METRICS["config_error"] = str(config_error)
+                    logger.warning(f"Found Tesseract binary at {path} but pytesseract config failed: {config_error}")
+                    # Continue with other methods
+        except Exception as binary_error:
+            OCR_METRICS[f"binary_error_{path}"] = str(binary_error)
+            # Continue trying other paths
+    
+    # Method 4: Check for installed package via package manager
+    try:
+        import subprocess
+        logger.info("Checking for Tesseract via dpkg")
+        result = subprocess.run(['dpkg', '-l', 'tesseract-ocr'], capture_output=True, text=True, check=False, timeout=5)
+        
+        if result.returncode == 0 and 'ii' in result.stdout:
+            OCR_METRICS["package_check"] = "Installed via dpkg"
+            logger.info("Tesseract package is installed via dpkg")
+            # Package exists but we already tried the common paths
+    except:
+        # dpkg might not exist or other issue, ignore this check
+        pass
+    
+    # Method 5: Final fallback - trust environment variable if all else fails
+    if env_setting:
+        logger.info("Using environment variable TESSERACT_AVAILABLE=True despite detection failures")
+        return True
+        
+    # Calculate and record detection duration
+    detection_duration = time.time() - start_time
+    OCR_METRICS["detection_duration"] = f"{detection_duration:.2f}s"
+    
+    logger.warning(f"Tesseract is NOT available in this environment (detection took {detection_duration:.2f}s)")
+    return False
 
-# Update availability flag based on our checks
-TESSERACT_AVAILABLE = tesseract_found
-
-if not tesseract_found:
-    print("Warning: Tesseract OCR not available after all checks")
-    print("Image text extraction will be limited.")
-    OCR_METRICS["final_status"] = "Not available"
-else:
-    print(f"Tesseract OCR is available: {OCR_METRICS['tesseract_path']}")
-    OCR_METRICS["final_status"] = "Available"
+# Run the check at import time
+TESSERACT_AVAILABLE = check_tesseract_availability()
+logger.info(f"Initial Tesseract availability check: {TESSERACT_AVAILABLE}")
 
 # Configure logging
 logging.basicConfig(
@@ -274,190 +311,121 @@ class DocumentProcessor:
             return ""
     
     def extract_text_from_image(self, image_path):
-        """Extract text from an image using OCR"""
+        """Extract text from an image using OCR with robust fallback mechanisms"""
         logger.info(f"Extracting text from image: {image_path}")
         global TESSERACT_AVAILABLE, OCR_METRICS
         
         # Update metrics
         OCR_METRICS["images_processed"] += 1
         
-        # Open the image
         try:
-            # Check Tesseract availability first with more detailed logging
-            if not TESSERACT_AVAILABLE:
-                logger.warning("Tesseract OCR is not available in this environment")
-                try:
-                    # Try to locate tesseract using multiple methods
-                    import subprocess
-                    # Method 1: Using 'which' command
-                    result = subprocess.run(['which', 'tesseract'], 
-                                           capture_output=True, text=True, check=False)
-                    tesseract_path = result.stdout.strip()
-                    
-                    # Method 2: Try common system locations
-                    if not tesseract_path:
-                        common_paths = [
-                            '/usr/bin/tesseract',
-                            '/usr/local/bin/tesseract',
-                            '/opt/homebrew/bin/tesseract',
-                            '/app/bin/tesseract'
-                        ]
-                        for path in common_paths:
-                            if os.path.exists(path) and os.access(path, os.X_OK):
-                                tesseract_path = path
-                                break
-                    
-                    if tesseract_path:
-                        logger.info(f"Tesseract binary found at: {tesseract_path}")
-                        # Try to update the pytesseract command path
-                        try:
-                            import pytesseract
-                            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-                            logger.info("Updated pytesseract command path")
-                            # Test if it works
-                            tesseract_version = pytesseract.get_tesseract_version()
-                            logger.info(f"Tesseract version: {tesseract_version}")
-                            TESSERACT_AVAILABLE = True
-                            OCR_METRICS["tesseract_path"] = tesseract_path
-                            OCR_METRICS["tesseract_version"] = str(tesseract_version)
-                        except Exception as e:
-                            logger.error(f"Failed to update pytesseract command: {e}")
-                            OCR_METRICS["last_error"] = str(e)
-                    else:
-                        logger.warning("Tesseract binary not found in any standard location")
-                except Exception as e:
-                    logger.error(f"Error checking for tesseract: {e}")
-                    OCR_METRICS["last_error"] = str(e)
-            
-            # Open the image file
+            # Open the image file first to at least get some basic info
             image = Image.open(image_path)
-            logger.info(f"Image opened successfully: {image.format} {image.size}")
+            width, height = image.size
+            format_type = image.format
+            mode = image.mode
+            logger.info(f"Image opened successfully: {format_type} {width}x{height} ({mode})")
             
-            # If Tesseract is still not available, extract basic info about the image
+            # Try to check for Tesseract one last time (multiple detection methods)
             if not TESSERACT_AVAILABLE:
-                width, height = image.size
-                format_type = image.format
-                mode = image.mode
-                
-                # Create a placeholder message with image metadata
-                placeholder = (
-                    f"[This is an image with dimensions {width}x{height} ({format_type}, {mode}). "
-                    f"OCR text extraction is not available in this environment. "
-                    f"The system will analyze the image metadata and any text you provide separately.]"
-                )
-                
+                logger.info("Performing one final Tesseract availability check")
+                TESSERACT_AVAILABLE = check_tesseract_availability()
+
+            # If OCR is explicitly disabled via environment variable, use fallback
+            ocr_enabled = os.getenv('OCR_ENABLED', '').lower()
+            if ocr_enabled == 'false':
+                logger.info("OCR is explicitly disabled via OCR_ENABLED environment variable")
+                TESSERACT_AVAILABLE = False
+            
+            # Prepare fallback response in case OCR fails
+            fallback_response = (
+                f"[Image analysis: {width}x{height} {format_type} image. "
+                f"OCR text extraction unavailable or failed. "
+                f"The system will analyze other content and metadata separately.]"
+            )
+            
+            # If Tesseract is not available, use the fallback immediately
+            if not TESSERACT_AVAILABLE:
                 OCR_METRICS["fallback_used"] += 1
-                logger.warning("Using fallback method for image processing (no OCR)")
-                return placeholder
+                logger.warning("Using fallback method for image processing (Tesseract not available)")
+                return fallback_response
             
-            # Check if tesseract is installed
+            # Try multiple OCR methods with increasing robustness
+            logger.info("Attempting OCR with pytesseract...")
+            
             try:
+                # 1. Import pytesseract dynamically
                 import pytesseract
-                tesseract_version = pytesseract.get_tesseract_version()
-                logger.info(f"Using Tesseract version: {tesseract_version}")
-            except Exception as e:
-                logger.error(f"Error getting Tesseract version: {e}")
-                OCR_METRICS["last_error"] = str(e)
                 
-                # Fall back to system command to check tesseract
-                try:
-                    import subprocess
-                    result = subprocess.run(['tesseract', '--version'], 
-                                          capture_output=True, text=True, check=False)
-                    if result.returncode == 0:
-                        logger.info(f"Tesseract version from system: {result.stdout.strip()}")
-                        
-                        # Try to recover by setting the tesseract command path
-                        which_result = subprocess.run(['which', 'tesseract'], 
-                                              capture_output=True, text=True, check=False)
-                        if which_result.returncode == 0:
-                            tesseract_path = which_result.stdout.strip()
-                            logger.info(f"Found tesseract at: {tesseract_path}")
-                            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-                        else:
-                            logger.error("Could not find tesseract path")
-                            return "[OCR ERROR: Could not locate Tesseract executable]"
-                    else:
-                        logger.error(f"Tesseract not found: {result.stderr.strip()}")
-                        return "[OCR ERROR: Tesseract not installed or not in PATH]"
-                except Exception as sub_e:
-                    logger.error(f"Failed to check tesseract version from system: {sub_e}")
-                    OCR_METRICS["last_error"] = str(sub_e)
-                    return "[OCR ERROR: Could not verify Tesseract installation]"
-            
-            # Convert to RGB mode if needed (some images have alpha channels)
-            if image.mode != 'RGB':
-                logger.info(f"Converting image from {image.mode} to RGB mode")
-                image = image.convert('RGB')
+                # 2. Prepare image for better OCR results
+                if image.mode != 'RGB':
+                    logger.info(f"Converting image from {image.mode} to RGB mode")
+                    image = image.convert('RGB')
                 
-            logger.info(f"Image ready for OCR: size={image.size}, mode={image.mode}")
-            
-            # Enhance image for better OCR results
-            from PIL import ImageEnhance, ImageFilter
-            
-            # Apply image enhancements
-            # 1. Increase contrast
-            enhancer = ImageEnhance.Contrast(image)
-            image = enhancer.enhance(2.0)
-            
-            # 2. Sharpen the image
-            image = image.filter(ImageFilter.SHARPEN)
-            
-            # Use pytesseract with explicit configuration
-            logger.info("Performing OCR with Tesseract")
-            try:
-                # First attempt with standard settings
-                text = pytesseract.image_to_string(
-                    image,
-                    config='--psm 6',  # Assume a single block of text
-                    lang='eng'         # Use English language
-                )
+                # 3. Try the explicit Tesseract path from env var if set
+                tesseract_path = os.getenv('TESSERACT_CMD')
+                if tesseract_path:
+                    logger.info(f"Using custom Tesseract path: {tesseract_path}")
+                    pytesseract.pytesseract.tesseract_cmd = tesseract_path
                 
+                # 4. First OCR attempt with standard settings
+                logger.info("Running first OCR attempt with standard settings")
+                text = pytesseract.image_to_string(image, lang='eng')
                 text = text.strip()
                 
-                if not text or len(text) < 10:  # If no text or very little text was extracted
-                    logger.warning(f"No or minimal text extracted from image. Trying with different settings.")
-                    
-                    # Try again with different settings for mixed content
-                    text = pytesseract.image_to_string(
-                        image,
-                        config='--psm 1',  # Auto-detect orientation and script
-                        lang='eng'
-                    )
+                # 5. If first attempt fails, try with different PSM modes
+                if not text or len(text.strip()) < 10:
+                    logger.info("First OCR attempt yielded little text, trying PSM mode 1")
+                    text = pytesseract.image_to_string(image, config='--psm 1', lang='eng')
                     text = text.strip()
                     
-                    # If still no text, try one more setting for sparse text
-                    if not text or len(text) < 10:
-                        logger.warning("Still minimal text. Trying with sparse text settings.")
-                        text = pytesseract.image_to_string(
-                            image,
-                            config='--psm 11',  # Sparse text - Find as much text as possible
-                            lang='eng'
-                        )
+                    # 6. Try with even more specialized settings if still no text
+                    if not text or len(text.strip()) < 10:
+                        logger.info("Second OCR attempt yielded little text, trying PSM mode 11")
+                        text = pytesseract.image_to_string(image, config='--psm 11', lang='eng')
                         text = text.strip()
                 
-                # Update metrics
-                OCR_METRICS["successful_extractions"] += 1
+                # 7. Apply image enhancements and try one last time if still no text
+                if not text or len(text.strip()) < 10:
+                    logger.info("All standard attempts failed, trying with image enhancement")
+                    
+                    # Import enhancement modules
+                    try:
+                        from PIL import ImageEnhance, ImageFilter
+                        
+                        # Enhance contrast
+                        enhancer = ImageEnhance.Contrast(image)
+                        enhanced_image = enhancer.enhance(2.0)
+                        
+                        # Sharpen the image
+                        enhanced_image = enhanced_image.filter(ImageFilter.SHARPEN)
+                        
+                        # Try OCR on enhanced image
+                        text = pytesseract.image_to_string(enhanced_image, config='--psm 6', lang='eng')
+                        text = text.strip()
+                    except ImportError as ie:
+                        logger.warning(f"Could not import enhancement tools: {ie}")
                 
-                logger.info(f"Extracted text length: {len(text)}")
-                if len(text) > 50:
-                    logger.info(f"Sample text: {text[:50]}...")
+                # 8. Update metrics and return results
+                if text and len(text.strip()) > 0:
+                    OCR_METRICS["successful_extractions"] += 1
+                    logger.info(f"OCR successful, extracted {len(text)} characters")
+                    return text
                 else:
-                    logger.info(f"Full text: {text}")
+                    logger.warning("All OCR attempts yielded no usable text")
+                    OCR_METRICS["fallback_used"] += 1
+                    return f"[This image ({width}x{height}, {format_type}) appears to contain no detectable text.]"
                     
-                # If still no text, provide a helpful message rather than empty string
-                if not text:
-                    text = "[OCR completed but no text was detected in this image]"
-                    
-                return text
-                
-            except Exception as ocr_e:
-                logger.error(f"Error during OCR processing: {ocr_e}")
-                OCR_METRICS["last_error"] = str(ocr_e)
-                return f"[OCR ERROR: {str(ocr_e)}]"
+            except Exception as ocr_error:
+                # Log the specific OCR error for debugging
+                logger.error(f"OCR extraction failed: {ocr_error}")
+                OCR_METRICS["last_error"] = str(ocr_error)
+                OCR_METRICS["fallback_used"] += 1
+                return fallback_response
                 
         except Exception as e:
-            logger.error(f"Error extracting text from image: {e}", exc_info=True)
+            # Handle general image processing errors
+            logger.error(f"Image processing error: {e}", exc_info=True)
             OCR_METRICS["last_error"] = str(e)
             return f"[Error processing image: {str(e)}]"
 

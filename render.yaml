@@ -1,30 +1,28 @@
 services:
   - type: web
     name: scam-detection-api
-    env: docker  # Ensure this is set to docker for Docker-based deployment
+    runtime: docker  # Explicitly set runtime to docker
+    env: docker      # Set environment to docker as well
     region: oregon
-    dockerfilePath: ./Dockerfile
-    dockerCommand: >-
-      bash -c "
-      echo 'TESSERACT_AVAILABLE=True' > .env && 
-      if tesseract --version; then echo 'Tesseract verified'; else echo 'Tesseract not found'; fi && 
-      gunicorn --bind 0.0.0.0:$PORT --workers=2 --timeout=120 wsgi:app --log-level=info"
-    buildCommand: ./render_build.sh
+    plan: free
+    dockerfilePath: ./Dockerfile   # Explicit path to Dockerfile
+    dockerContext: .              # Build context is the current dir
+    dockerCommand: ./start.sh     # Use our universal startup script in Docker
     envVars:
       - key: PORT
         value: 10000
-      - key: TESSERACT_AVAILABLE
-        value: "True"
+      - key: RENDER
+        value: "true"
       - key: DOCKER_DEPLOYMENT
-        value: "True"
-      - key: OCR_ENABLED
-        value: "True"
+        value: "true"
       - key: PYTHONUNBUFFERED
         value: "1"
-      - key: PATH  # Add tesseract to the PATH
-        value: "/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin"
-    plan: free
-    healthCheckPath: /ocr-status  # Use our detailed OCR status endpoint for health checks
+    buildCommand: >-
+      chmod +x ./render_install_tesseract.sh &&
+      chmod +x ./start.sh &&
+      echo "Build complete"
+    startCommand: ./start.sh  # Fallback to run the script directly if Docker isn't used
+    healthCheckPath: /health
     headers:
       - path: /*
         name: Access-Control-Allow-Origin
