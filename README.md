@@ -208,3 +208,7 @@ The following environment variables can be configured:
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Future Plans for Improvements 
+- Implementing a more robust and scalable architecture for handling large volumes of images
+- Enhancing the model's accuracy through fine-tuning and incorporating additional features
