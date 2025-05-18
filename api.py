@@ -77,26 +77,25 @@ def health():
 
 @app.route('/ocr-status', methods=['GET'])
 def ocr_status():
-    """Checks Tesseract OCR availability and status with comprehensive diagnostics"""
+    """Lightweight OCR status check optimized for free tier"""
     import os
-    import sys
-    import platform
     from document_processor import TESSERACT_AVAILABLE, OCR_METRICS
     
-    # Prepare diagnostics data
+    # Create lightweight response
     diagnostics = {
-        "system_info": {
-            "python_version": sys.version,
-            "platform": platform.platform(),
-            "is_docker": os.path.exists("/.dockerenv") or os.getenv('DOCKER_DEPLOYMENT') == 'True',
-            "working_directory": os.getcwd()
-        },
+        "is_free_tier": True,
+        "lightweight_mode": os.getenv('LIGHTWEIGHT_OCR', 'true').lower() == 'true',
+        "ocr_available": TESSERACT_AVAILABLE,
+        "ocr_enabled": os.getenv('OCR_ENABLED', '').lower() == 'true',
         "environment": {
-            "env_var": os.getenv('TESSERACT_AVAILABLE', 'Not set'),
-            "path": os.getenv('PATH', 'Not set'),
-            "python_path": os.getenv('PYTHONPATH', 'Not set')
+            "render": os.getenv('RENDER', 'false').lower() == 'true',
+            "docker": os.path.exists("/.dockerenv") or os.getenv('DOCKER_DEPLOYMENT', '').lower() == 'true'
         },
-        "ocr_metrics": OCR_METRICS if 'OCR_METRICS' in dir() else {"error": "OCR_METRICS not available"}
+        "metrics": {
+            "images_processed": OCR_METRICS.get("images_processed", 0),
+            "successful_extractions": OCR_METRICS.get("successful_extractions", 0),
+            "fallback_used": OCR_METRICS.get("fallback_used", 0)
+        }
     }
     
     # Try to import and test pytesseract directly

@@ -6,17 +6,13 @@ ENV TESSERACT_AVAILABLE=True
 ENV PYTHONUNBUFFERED=1
 ENV DOCKER_DEPLOYMENT=True
 
-# Install Tesseract OCR and other dependencies
+# Install Tesseract OCR and other dependencies (minimal setup)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-eng \
-    tesseract-ocr-osd \
     libgl1-mesa-glx \
-    libglib2.0-0 \
     curl \
-    procps \
-    fonts-liberation \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
